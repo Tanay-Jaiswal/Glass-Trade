@@ -1,0 +1,277 @@
+/* ============================================================
+   index.css — Glass Design System
+   Dark glassmorphism with a deep navy / electric blue palette.
+   Font: Inter from Google Fonts
+============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ── Tokens ─────────────────────────────────────────────── */
+:root {
+  /* Core palette */
+  --bg-base: #050c1a;
+  --bg-surface: #0b1628;
+  --bg-card: rgba(16, 28, 56, 0.72);
+  --bg-card-hover: rgba(20, 36, 70, 0.85);
+  --border: rgba(56, 100, 200, 0.18);
+  --border-bright: rgba(90, 150, 255, 0.35);
+
+  /* Brand */
+  --accent: #4f8fff;
+  --accent-glow: rgba(79, 143, 255, 0.25);
+  --accent-dim: #2e5fb3;
+  --gold: #f5c542;
+  --gold-dim: rgba(245, 197, 66, 0.15);
+
+  /* Semantic */
+  --success: #30d97e;
+  --warning: #f5a623;
+  --danger: #ff5c5c;
+  --muted: rgba(160, 190, 255, 0.45);
+
+  /* Text */
+  --text-primary: #e8f0ff;
+  --text-secondary: rgba(180, 205, 255, 0.7);
+  --text-dim: rgba(140, 170, 230, 0.45);
+
+  /* Chart */
+  --chart-line: #4f8fff;
+  --chart-perfect: rgba(48, 217, 126, 0.6);
+  --chart-low-conf: rgba(160, 160, 200, 0.4);
+
+  /* Misc */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --shadow: 0 8px 40px rgba(0, 0, 40, 0.55);
+  --glow: 0 0 40px rgba(79, 143, 255, 0.15);
+  --transition: 0.2s ease;
+}
+
+/* ── Reset ───────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle animated gradient background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 20%, rgba(30, 60, 150, 0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(60, 20, 120, 0.12) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root { position: relative; z-index: 1; }
+
+/* ── Typography ──────────────────────────────────────────── */
+h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; }
+h2 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+h4 { font-size: 0.9rem; font-weight: 600; color: var(--text-secondary); }
+
+code, .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+}
+
+/* ── Glass Card ──────────────────────────────────────────── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow), var(--glow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.card:hover {
+  border-color: var(--border-bright);
+  box-shadow: var(--shadow), 0 0 60px rgba(79, 143, 255, 0.2);
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(79, 143, 255, 0.3);
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(79, 143, 255, 0.45);
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--border-bright);
+  color: var(--text-primary);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Badges ──────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-blue  { background: rgba(79, 143, 255, 0.15); color: var(--accent); border: 1px solid rgba(79, 143, 255, 0.3); }
+.badge-gold  { background: var(--gold-dim); color: var(--gold); border: 1px solid rgba(245, 197, 66, 0.3); }
+.badge-warn  { background: rgba(245, 166, 35, 0.15); color: var(--warning); border: 1px solid rgba(245, 166, 35, 0.3); }
+.badge-dim   { background: rgba(120, 140, 200, 0.1); color: var(--muted); border: 1px solid var(--border); }
+
+/* ── Stat Pill ───────────────────────────────────────────── */
+.stat-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-pill .label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.stat-pill .value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+.stat-pill .sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* ── Select ──────────────────────────────────────────────── */
+select {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 36px 8px 12px;
+  font-size: 0.875rem;
+  font-family: 'Inter', sans-serif;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234f8fff' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+select:hover, select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* ── Progress bar ────────────────────────────────────────── */
+.progress-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress-bar .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #8fb8ff);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+/* ── Divider ─────────────────────────────────────────────── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+/* ── Tooltip ─────────────────────────────────────────────── */
+.recharts-tooltip-wrapper .custom-tooltip {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-bright) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 10px 14px !important;
+  font-size: 0.82rem !important;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+/* ── Animations ──────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.animate-in { animation: fadeIn 0.35s ease both; }
+.animate-delay-1 { animation-delay: 0.05s; }
+.animate-delay-2 { animation-delay: 0.1s; }
+.animate-delay-3 { animation-delay: 0.15s; }
+
+/* ── Layout utils ────────────────────────────────────────── */
+.flex       { display: flex; }
+.flex-col   { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-2      { gap: 8px; }
+.gap-3      { gap: 12px; }
+.gap-4      { gap: 16px; }
+.gap-6      { gap: 24px; }
+.w-full     { width: 100%; }
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+.text-sm    { font-size: 0.82rem; }
+.text-muted { color: var(--text-secondary); }
+.text-dim   { color: var(--text-dim); }
+.font-mono  { font-family: 'JetBrains Mono', monospace; }
