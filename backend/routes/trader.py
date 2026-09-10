@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/trader", tags=["trader"])
 
 
-def _get_client() -> GlimpseClient:
+def _get_client() -> Optional[GlimpseClient]:
     api_key = os.getenv("GLIMPSE_API_KEY", "")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="GLIMPSE_API_KEY not configured.")
+    if not api_key or api_key == "paste_your_key_here":
+        return None
     return GlimpseClient(api_key=api_key)
 
 
@@ -95,9 +95,13 @@ async def evaluate_signal(req: EvaluateRequest):
         dry_run=True,  # always dry_run in evaluate
     )
 
+    client = _get_client()
     try:
-        async with _get_client() as client:
-            decision = await evaluate_and_trade(signal, config, client, contracts=req.contracts)
+        if client:
+            async with client:
+                decision = await evaluate_and_trade(signal, config, client, contracts=req.contracts)
+        else:
+            decision = await evaluate_and_trade(signal, config, None, contracts=req.contracts)
         return {"success": True, "signal": signal, "decision": decision.to_dict()}
     except GlimpseAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
@@ -144,9 +148,19 @@ async def execute_signal(req: ExecuteRequest):
     mode = "DRY RUN" if req.dry_run else "🔴 LIVE EXECUTION"
     logger.info("Trade request received [%s]: topic=%s option=%s", mode, req.topic_id, req.option_id)
 
+    client = _get_client()
+    if not req.dry_run and not client:
+        raise HTTPException(
+            status_code=400,
+            detail="Live trade execution requires GLIMPSE_API_KEY configured in backend/.env",
+        )
+
     try:
-        async with _get_client() as client:
-            decision = await evaluate_and_trade(signal, config, client, contracts=req.contracts)
+        if client:
+            async with client:
+                decision = await evaluate_and_trade(signal, config, client, contracts=req.contracts)
+        else:
+            decision = await evaluate_and_trade(signal, config, None, contracts=req.contracts)
         return {
             "success": True,
             "mode": mode,

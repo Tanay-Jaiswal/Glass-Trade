@@ -159,21 +159,33 @@ async def evaluate_and_trade(
 
     # ── Cost estimate (always) ───────────────────────────────────────────────
     cost_estimate = None
-    try:
-        cost_estimate = await client.estimate_trade(
-            topic_id=topic_id,
-            option_id=option_id,
-            contracts=n_contracts,
-            prediction=prediction,
-            trade_type="buy",
-        )
-        logger.info(
-            "Trade estimate for %s [%s] → %s×%d contracts: %s",
-            topic_title, option_title, prediction.upper(), n_contracts, cost_estimate,
-        )
-    except GlimpseAPIError as exc:
-        logger.warning("estimate_trade failed: %s", exc)
-        cost_estimate = {"error": str(exc)}
+    if client is not None:
+        try:
+            cost_estimate = await client.estimate_trade(
+                topic_id=topic_id,
+                option_id=option_id,
+                contracts=n_contracts,
+                prediction=prediction,
+                trade_type="buy",
+            )
+            logger.info(
+                "Trade estimate for %s [%s] → %s×%d contracts: %s",
+                topic_title, option_title, prediction.upper(), n_contracts, cost_estimate,
+            )
+        except GlimpseAPIError as exc:
+            logger.warning("estimate_trade failed: %s", exc)
+            cost_estimate = {"error": str(exc)}
+    else:
+        # Client not configured (demo / offline simulation)
+        prob = signal.get("live_implied_prob", 0.5)
+        effective_price = prob if prediction == "yes" else (1.0 - prob)
+        est_sats = int(round(effective_price * 1000 * n_contracts))
+        cost_estimate = {
+            "estimated_cost_sats": est_sats,
+            "unit_price": effective_price,
+            "contracts": n_contracts,
+            "simulated": True,
+        }
 
     # ── Dry run gate ─────────────────────────────────────────────────────────
     if config.dry_run:
@@ -194,6 +206,14 @@ async def evaluate_and_trade(
             signal=signal, passed_risk_gate=True, risk_gate_reason=reason,
             cost_estimate=cost_estimate, dry_run=True, executed=False,
             api_result=None, trade_id=trade_id,
+        )
+
+    if not client:
+        return TradeDecision(
+            signal=signal, passed_risk_gate=False,
+            risk_gate_reason="Live trade execution requires GLIMPSE_API_KEY. Set it in backend/.env",
+            cost_estimate=cost_estimate, dry_run=False, executed=False,
+            api_result={"error": "API key not configured"}, trade_id=None,
         )
 
     # ── Live execution ────────────────────────────────────────────────────────

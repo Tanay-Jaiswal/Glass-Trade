@@ -125,13 +125,33 @@ app.include_router(trader_router)
 @app.get("/api/health")
 async def health():
     """Health check."""
-    api_key_set = bool(os.getenv("GLIMPSE_API_KEY"))
+    key = os.getenv("GLIMPSE_API_KEY", "")
+    api_key_set = bool(key and key != "paste_your_key_here")
     db_path = os.getenv("DB_PATH", "glass.db")
     return {
         "status": "ok",
         "api_key_configured": api_key_set,
         "db_path": db_path,
+        "demo_mode": not api_key_set,
     }
+
+
+@app.post("/api/settings/key")
+async def save_api_key(body: dict):
+    """Save or update the Glimpse API key."""
+    key = body.get("api_key", "").strip()
+    if not key:
+        return {"success": False, "message": "API key cannot be empty."}
+    os.environ["GLIMPSE_API_KEY"] = key
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    try:
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.write(f"GLIMPSE_API_KEY={key}\nDB_PATH=glass.db\nMAX_RESOLVED_PAGES=20\n")
+        logger.info("Saved GLIMPSE_API_KEY to %s", env_path)
+    except Exception as exc:
+        logger.warning("Could not persist key to .env: %s", exc)
+
+    return {"success": True, "api_key_configured": True}
 
 
 if __name__ == "__main__":

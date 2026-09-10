@@ -7,6 +7,7 @@ import {
   fetchHealth,
   fetchSignals,
   fetchTradeHistory,
+  saveApiKey,
 } from "./api";
 import CalibrationChart from "./components/CalibrationChart";
 import BrierScore from "./components/BrierScore";
@@ -33,6 +34,10 @@ export default function App() {
   const [apiConfigured, setApiConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [keySaving, setKeySaving] = useState(false);
+  const [saveKeyMessage, setSaveKeyMessage] = useState("");
 
   // ── Calibration tab state ─────────────────────────────────────────────────
   const [calibrationData, setCalibrationData] = useState(null);
@@ -163,6 +168,26 @@ export default function App() {
     }
   };
 
+  const handleSaveKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    setKeySaving(true);
+    setSaveKeyMessage("");
+    try {
+      const res = await saveApiKey(apiKeyInput.trim());
+      if (res.success) {
+        setShowKeyModal(false);
+        setApiConfigured(true);
+        window.location.reload();
+      } else {
+        setSaveKeyMessage(res.message || "Failed to save key");
+      }
+    } catch (err) {
+      setSaveKeyMessage(err.message || "Error saving API key");
+    } finally {
+      setKeySaving(false);
+    }
+  };
+
   return (
     <div style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 24px", minHeight: "100vh" }}>
       {/* ── Top Header ─────────────────────────────────────────────────────── */}
@@ -211,8 +236,17 @@ export default function App() {
                 }}
               />
               <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>
-                {apiConfigured ? "Live Production API" : "Key Needed"}
+                {apiConfigured ? "Live Production API" : "Key Needed (Demo)"}
               </span>
+              {!apiConfigured && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowKeyModal(true)}
+                  style={{ padding: "3px 8px", fontSize: "0.72rem", marginLeft: 4 }}
+                >
+                  Set Key
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -281,6 +315,39 @@ export default function App() {
           )}
         </button>
       </div>
+
+      {/* ── Demo Banner ─────────────────────────────────────────────────────── */}
+      {!apiConfigured && (
+        <div
+          style={{
+            background: "rgba(59, 130, 246, 0.08)",
+            border: "1px solid rgba(59, 130, 246, 0.25)",
+            borderRadius: 8,
+            padding: "10px 16px",
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+            fontSize: "0.82rem",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>⚡</span>
+            <span>
+              <strong>Demo Mode Active</strong> — Viewing sample Bitcoin prediction markets (120 resolved markets).
+            </span>
+          </div>
+          <button
+            className="btn btn-secondary"
+            style={{ padding: "4px 12px", fontSize: "0.78rem" }}
+            onClick={() => setShowKeyModal(true)}
+          >
+            Enter Glimpse API Key
+          </button>
+        </div>
+      )}
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
       <div
@@ -437,6 +504,84 @@ export default function App() {
             loadTradeHistory();
           }}
         />
+      )}
+
+      {/* ── Connect API Key Modal ───────────────────────────────────────────── */}
+      {showKeyModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 16,
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: 480,
+              width: "100%",
+              padding: 24,
+              border: "1px solid var(--border)",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: "1.1rem" }}>Connect Glimpse API Key</h3>
+              <button
+                onClick={() => setShowKeyModal(false)}
+                style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: "1.2rem" }}
+              >
+                ✕
+              </button>
+            </div>
+            <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: 16 }}>
+              Enter your Glimpse API key to connect live prediction markets, run real-time syncs, and trade live.
+            </p>
+            <input
+              type="password"
+              placeholder="Paste your API key here..."
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: 6,
+                border: "1px solid var(--border)",
+                background: "rgba(255, 255, 255, 0.05)",
+                color: "#fff",
+                fontSize: "0.88rem",
+                marginBottom: 16,
+                boxSizing: "border-box",
+              }}
+            />
+            {saveKeyMessage && (
+              <p style={{ fontSize: "0.8rem", color: "#f87171", marginBottom: 12 }}>{saveKeyMessage}</p>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowKeyModal(false)}
+                style={{ padding: "8px 16px" }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleSaveKey}
+                disabled={keySaving || !apiKeyInput.trim()}
+                style={{ padding: "8px 16px" }}
+              >
+                {keySaving ? "Saving..." : "Save & Connect"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Footer ──────────────────────────────────────────────────────────── */}

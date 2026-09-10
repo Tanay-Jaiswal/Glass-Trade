@@ -86,3 +86,9 @@ export const executeSignal = (payload) =>
 export const fetchTradeHistory = (limit = 50) =>
   apiFetch(`/api/trader/history?limit=${limit}`);
 
+export const saveApiKey = (apiKey) =>
+  apiFetch("/api/settings/key", {
+    method: "POST",
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+

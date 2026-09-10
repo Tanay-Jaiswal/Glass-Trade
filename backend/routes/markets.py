@@ -40,13 +40,26 @@ def _get_client() -> GlimpseClient:
 
 @batches_router.get("/batches")
 async def list_batches():
-    """Return all Glimpse market batches."""
-    try:
-        async with _get_client() as client:
-            batches = await client.get_batches()
-        return {"success": True, "batches": batches}
-    except GlimpseAPIError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+    """Return all Glimpse market batches, falling back to demo batch if API key is not configured."""
+    api_key = os.getenv("GLIMPSE_API_KEY", "")
+    if api_key and api_key != "paste_your_key_here":
+        try:
+            async with _get_client() as client:
+                batches = await client.get_batches()
+            return {"success": True, "batches": batches, "demo_mode": False}
+        except Exception as exc:
+            logger.warning("Failed to fetch live batches from Glimpse: %s", exc)
+
+    demo_batches = [
+        {
+            "batch_id": "demo-batch-btc",
+            "main_topic_title": "Bitcoin (BTC) Price Markets — Demo",
+            "topic_type": "btc",
+            "status": "active",
+            "is_demo": True,
+        }
+    ]
+    return {"success": True, "batches": demo_batches, "demo_mode": True}
 
 
 # ---------------------------------------------------------------------------
@@ -206,43 +219,90 @@ async def get_conviction_signals(
             }
         cached_cal = compute_calibration(markets)
 
-    # 2. Fetch live active markets
-    try:
+    DEMO_ACTIVE_MARKETS = [
+        {
+            "topic_id": 90001,
+            "title": "BTC Spot > $98,500 at 00:00 UTC",
+            "category": "Crypto",
+            "batch_id": "demo-batch-btc",
+            "outcomes": [
+                {"option_id": 1, "option_title": "Yes (Above $98.5k)", "yes_price": 0.35},
+                {"option_id": 2, "option_title": "No (Below $98.5k)", "yes_price": 0.65},
+            ],
+        },
+        {
+            "topic_id": 90002,
+            "title": "BTC Range: $95,000 to $96,500 at Close",
+            "category": "Crypto",
+            "batch_id": "demo-batch-btc",
+            "outcomes": [
+                {"option_id": 1, "option_title": "In Range", "yes_price": 0.54},
+                {"option_id": 2, "option_title": "Out of Range", "yes_price": 0.46},
+            ],
+        },
+        {
+            "topic_id": 90003,
+            "title": "BTC Above $102,000 End of Week",
+            "category": "Crypto",
+            "batch_id": "demo-batch-btc",
+            "outcomes": [
+                {"option_id": 1, "option_title": "Above $102k", "yes_price": 0.78},
+                {"option_id": 2, "option_title": "Below $102k", "yes_price": 0.22},
+            ],
+        },
+        {
+            "topic_id": 90004,
+            "title": "BTC Retraces Below $92,000",
+            "category": "Crypto",
+            "batch_id": "demo-batch-btc",
+            "outcomes": [
+                {"option_id": 1, "option_title": "Retraces Below", "yes_price": 0.14},
+                {"option_id": 2, "option_title": "Holds Above", "yes_price": 0.86},
+            ],
+        },
+    ]
+
+    api_key = os.getenv("GLIMPSE_API_KEY", "")
+    is_demo = batch_id.startswith("demo-") or not api_key or api_key == "paste_your_key_here"
+
+    if is_demo:
+        enriched_markets = DEMO_ACTIVE_MARKETS
+    else:
+        # 2. Fetch live active markets
+        try:
+            async with _get_client() as client:
+                active_data = await client.get_active_markets_v2(
+                    batch_id, page=page, page_size=page_size
+                )
+        except GlimpseAPIError as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+
+        active_markets = active_data.get("markets", []) or active_data.get("data", [])
+
+        if not active_markets:
+            return {
+                "success": True,
+                "message": "No active markets found in this batch.",
+                "signals": [],
+                "summary": {},
+            }
+
+        # 3. For each active market, fetch full quotes to get per-outcome yes_price
+        enriched_markets = []
         async with _get_client() as client:
-            active_data = await client.get_active_markets_v2(
-                batch_id, page=page, page_size=page_size
-            )
-    except GlimpseAPIError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
-
-    active_markets = active_data.get("markets", []) or active_data.get("data", [])
-
-    if not active_markets:
-        return {
-            "success": True,
-            "message": "No active markets found in this batch.",
-            "signals": [],
-            "summary": {},
-        }
-
-    # 3. For each active market, fetch full quotes to get per-outcome yes_price
-    enriched_markets = []
-    async with _get_client() as client:
-        for market in active_markets:
-            tid = market.get("topic_id") or market.get("id")
-            if not tid:
-                continue
-            try:
-                quotes = await client.get_market_quotes(tid)
-                # Merge quote outcomes into the market dict
-                outcomes = quotes.get("outcomes") or quotes.get("options") or []
-                enriched_markets.append({
-                    **market,
-                    "outcomes": outcomes,
-                })
-            except GlimpseAPIError:
-                # Skip markets where quotes fail — don't abort the whole request
-                pass
+            for market in active_markets:
+                tid = market.get("topic_id") or market.get("id")
+                if not tid:
+                    continue
+                try:
+                    quotes = await client.get_market_quotes(tid)
+                    outcomes = quotes.get("outcomes") or quotes.get("options") or []
+                    enriched_markets.append({
+                        **market,
+                        "outcomes": outcomes,
+                    })
+                except GlimpseAPIError:
+                    pass
 
     # 4. Score all enriched markets
     signals = find_best_opportunities(
