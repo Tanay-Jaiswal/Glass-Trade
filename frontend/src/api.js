@@ -63,3 +63,26 @@ export const clearCalibrationCache = (batchId, topicType) =>
 
 // ─── Health ───────────────────────────────────────────────────────────────────
 export const fetchHealth = () => apiFetch("/api/health");
+
+// ─── Signals (Layer 2) ────────────────────────────────────────────────────────
+export const fetchSignals = (batchId, topicType = "btc", minScore = 0.05, topN = 20) =>
+  apiFetch(
+    `/api/markets/signals?batch_id=${batchId}&topic_type=${topicType}&min_score=${minScore}&top_n=${topN}`
+  );
+
+// ─── Trader (Layer 3) ─────────────────────────────────────────────────────────
+export const evaluateSignal = (payload) =>
+  apiFetch("/api/trader/evaluate", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const executeSignal = (payload) =>
+  apiFetch("/api/trader/execute", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const fetchTradeHistory = (limit = 50) =>
+  apiFetch(`/api/trader/history?limit=${limit}`);
+

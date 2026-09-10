@@ -23,6 +23,7 @@ import database as db
 from routes.markets import router as markets_router, batches_router
 from routes.calibration import router as calibration_router
 from routes.portfolio import router as portfolio_router
+from routes.trader import router as trader_router
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -84,12 +85,14 @@ async def lifespan(app: FastAPI):
 # App
 # ---------------------------------------------------------------------------
 app = FastAPI(
-    title="Glass — Glimpse Calibration Engine",
+    title="Glass — Glimpse Calibration & Conviction Engine",
     description=(
-        "Calibration and conviction engine for Glimpse Bitcoin prediction markets. "
-        "Computes Brier scores and reliability diagrams from real resolved market data."
+        "Calibration, conviction scoring, and trade execution engine for Glimpse prediction markets. "
+        "Layer 1: Brier scores & reliability diagrams. "
+        "Layer 2: Live signal scoring. "
+        "Layer 3: Risk-gated trade execution."
     ),
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -106,6 +109,7 @@ app.include_router(batches_router)
 app.include_router(markets_router)
 app.include_router(calibration_router)
 app.include_router(portfolio_router)
+app.include_router(trader_router)
 
 
 @app.get("/api/health")

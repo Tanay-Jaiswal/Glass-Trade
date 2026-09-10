@@ -15,6 +15,8 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
 import database as db
 from api_client import GlimpseClient, GlimpseAPIError
+from calibration import compute_calibration
+from conviction import find_best_opportunities, summarise_signals
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/markets", tags=["markets"])
@@ -168,3 +170,94 @@ async def get_market_quotes(topic_id: int):
         return {"success": True, **data}
     except GlimpseAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Conviction signals
+# ---------------------------------------------------------------------------
+
+@router.get("/signals")
+async def get_conviction_signals(
+    batch_id: str = Query(..., description="Batch UUID"),
+    topic_type: Optional[str] = Query("btc", description="Topic type filter (default: btc)"),
+    min_score: float = Query(0.05, ge=0.0, le=1.0, description="Minimum conviction score"),
+    top_n: int = Query(20, ge=1, le=100, description="Max number of signals to return"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+):
+    """
+    Score live active markets against historical calibration and return
+    ranked conviction signals — the heart of Layer 2.
+
+    Requires resolved markets to have been synced (/api/markets/sync) so
+    that calibration data is available.
+    """
+    # 1. Load calibration from cache or compute fresh
+    cached_cal = db.get_latest_calibration(batch_id, topic_type or "btc")
+    if not cached_cal:
+        # Try computing on the fly from cached markets
+        markets = db.get_resolved_markets(batch_id, topic_type=topic_type)
+        if not markets:
+            return {
+                "success": False,
+                "message": "No resolved markets cached. Run /api/markets/sync first.",
+                "signals": [],
+                "summary": {},
+            }
+        cached_cal = compute_calibration(markets)
+
+    # 2. Fetch live active markets
+    try:
+        async with _get_client() as client:
+            active_data = await client.get_active_markets_v2(
+                batch_id, page=page, page_size=page_size
+            )
+    except GlimpseAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    active_markets = active_data.get("markets", []) or active_data.get("data", [])
+
+    if not active_markets:
+        return {
+            "success": True,
+            "message": "No active markets found in this batch.",
+            "signals": [],
+            "summary": {},
+        }
+
+    # 3. For each active market, fetch full quotes to get per-outcome yes_price
+    enriched_markets = []
+    async with _get_client() as client:
+        for market in active_markets:
+            tid = market.get("topic_id") or market.get("id")
+            if not tid:
+                continue
+            try:
+                quotes = await client.get_market_quotes(tid)
+                # Merge quote outcomes into the market dict
+                outcomes = quotes.get("outcomes") or quotes.get("options") or []
+                enriched_markets.append({
+                    **market,
+                    "outcomes": outcomes,
+                })
+            except GlimpseAPIError:
+                # Skip markets where quotes fail — don't abort the whole request
+                pass
+
+    # 4. Score all enriched markets
+    signals = find_best_opportunities(
+        active_markets=enriched_markets,
+        calibration_data=cached_cal,
+        min_score=min_score,
+        top_n=top_n,
+    )
+    summary = summarise_signals(signals)
+
+    return {
+        "success": True,
+        "batch_id": batch_id,
+        "topic_type": topic_type,
+        "active_markets_scanned": len(enriched_markets),
+        "signals": signals,
+        "summary": summary,
+    }

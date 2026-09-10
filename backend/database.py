@@ -45,10 +45,33 @@ CREATE TABLE IF NOT EXISTS calibration_cache (
 );
 """
 
+CREATE_TRADES = """
+CREATE TABLE IF NOT EXISTS trades (
+    trade_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at        INTEGER NOT NULL,              -- Unix seconds
+    topic_id          INTEGER NOT NULL,
+    option_id         INTEGER NOT NULL,
+    topic_title       TEXT,
+    option_title      TEXT,
+    prediction        TEXT NOT NULL,                -- 'yes' | 'no'
+    trade_type        TEXT NOT NULL,                -- 'buy' | 'sell'
+    contracts         INTEGER NOT NULL,
+    conviction_score  REAL,
+    direction         TEXT,                         -- 'fade' | 'ride'
+    live_implied_prob REAL,
+    cost_estimate     REAL,                         -- from estimate_trade()
+    dry_run           INTEGER NOT NULL DEFAULT 1,   -- 1=dry_run, 0=executed
+    executed          INTEGER NOT NULL DEFAULT 0,   -- 1 if trade API call succeeded
+    api_result_json   TEXT,                         -- raw API response
+    signal_json       TEXT                          -- full ConvictionSignal JSON
+);
+"""
+
 CREATE_INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_rm_batch_type ON resolved_markets(batch_id, topic_type);",
     "CREATE INDEX IF NOT EXISTS idx_rm_implied_prob ON resolved_markets(implied_prob);",
     "CREATE INDEX IF NOT EXISTS idx_cc_batch_type ON calibration_cache(batch_id, topic_type, computed_at);",
+    "CREATE INDEX IF NOT EXISTS idx_trades_topic ON trades(topic_id, created_at);",
 ]
 
 
@@ -66,6 +89,7 @@ def init_db() -> None:
     with get_connection() as conn:
         conn.execute(CREATE_RESOLVED_MARKETS)
         conn.execute(CREATE_CALIBRATION_CACHE)
+        conn.execute(CREATE_TRADES)
         for idx in CREATE_INDICES:
             conn.execute(idx)
     logger.info("Database initialised at %s", DB_PATH)
@@ -222,3 +246,79 @@ def get_latest_calibration(batch_id: str, topic_type: str) -> Optional[dict]:
             (batch_id, topic_type),
         ).fetchone()
     return json.loads(row[0]) if row else None
+
+
+# ---------------------------------------------------------------------------
+# Trade log
+# ---------------------------------------------------------------------------
+
+def insert_trade_log(
+    topic_id: int,
+    option_id: int,
+    topic_title: str,
+    option_title: str,
+    prediction: str,
+    trade_type: str,
+    contracts: int,
+    conviction_score: Optional[float],
+    direction: Optional[str],
+    live_implied_prob: Optional[float],
+    cost_estimate: Optional[float],
+    dry_run: bool,
+    executed: bool,
+    api_result: Optional[dict],
+    signal: Optional[dict],
+) -> int:
+    """Insert a trade decision record. Returns the new trade_id."""
+    import time
+    with get_connection() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO trades
+            (created_at, topic_id, option_id, topic_title, option_title,
+             prediction, trade_type, contracts, conviction_score, direction,
+             live_implied_prob, cost_estimate, dry_run, executed,
+             api_result_json, signal_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(time.time()),
+                topic_id, option_id, topic_title, option_title,
+                prediction, trade_type, contracts,
+                conviction_score, direction, live_implied_prob, cost_estimate,
+                1 if dry_run else 0,
+                1 if executed else 0,
+                json.dumps(api_result) if api_result else None,
+                json.dumps(signal) if signal else None,
+            ),
+        )
+        return cur.lastrowid
+
+
+def get_trade_history(limit: int = 50) -> list[dict]:
+    """Return recent trade log entries, newest first."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM trades ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    result = []
+    for row in rows:
+        d = dict(row)
+        d["dry_run"] = bool(d["dry_run"])
+        d["executed"] = bool(d["executed"])
+        if d.get("api_result_json"):
+            d["api_result"] = json.loads(d["api_result_json"])
+        if d.get("signal_json"):
+            d["signal"] = json.loads(d["signal_json"])
+        result.append(d)
+    return result
+
+
+def update_trade_result(trade_id: int, executed: bool, api_result: dict) -> None:
+    """Update a trade record with the actual API execution result."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE trades SET executed=?, api_result_json=? WHERE trade_id=?",
+            (1 if executed else 0, json.dumps(api_result), trade_id),
+        )
