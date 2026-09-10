@@ -35,18 +35,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger("glass")
 
-# ---------------------------------------------------------------------------
-# Load environment
-# ---------------------------------------------------------------------------
-load_dotenv()  # reads .env in cwd; silently no-ops if absent
+# Load .env from cwd or parent dir if present
+load_dotenv()
+_parent_env = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env")
+if os.path.exists(_parent_env):
+    load_dotenv(_parent_env)
 
 def _ensure_api_key() -> None:
     """
-    If GLIMPSE_API_KEY is not set in the environment, prompt for it in the terminal.
-    The key is stored in the process environment for the session only — never persisted.
+    If GLIMPSE_API_KEY is not set in the environment, prompt for it in the terminal
+    if running in an interactive TTY. If running non-interactively or in the background,
+    proceed without hanging.
     """
     if os.getenv("GLIMPSE_API_KEY"):
         logger.info("GLIMPSE_API_KEY loaded from environment.")
+        return
+
+    is_interactive = hasattr(sys.stdin, "isatty") and sys.stdin.isatty()
+    if not is_interactive:
+        logger.warning(
+            "GLIMPSE_API_KEY is not set and terminal is non-interactive. "
+            "Running without API key (live sync will return 503 until set in .env)."
+        )
         return
 
     print("\n" + "=" * 60)
@@ -54,11 +64,11 @@ def _ensure_api_key() -> None:
     print("=" * 60)
     print("\nGLIMPSE_API_KEY is not set.")
     print("You can find your API key at: https://glimpse.markets/settings")
-    print("(Or add it to a .env file in this directory — see .env.example)\n")
+    print("(Or add it to a .env file — see .env.example)\n")
 
     try:
         key = getpass.getpass("Enter your Glimpse API key: ").strip()
-    except (EOFError, KeyboardInterrupt):
+    except (EOFError, KeyboardInterrupt, Exception):
         print("\nNo API key provided. Some endpoints will return 503.")
         return
 
